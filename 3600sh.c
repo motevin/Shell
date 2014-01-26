@@ -24,7 +24,26 @@ int main(int argc, char*argv[]) {
     // You should issue the prompt here
       
     // You should read in the command and execute it here
-    
+    printf("%% "); 
+        fflush(stdout); /* flush from output buffer to terminal itself */
+    getargs(cmd, &childargc, childargv); /* childargc and childargv are
+            output args; on input they have garbage, but getargs sets them. */
+        /* Check first for built-in commands. */
+    if ( childargc > 0 && strcmp(childargv[0], "exit") == 0 ) {
+            exit(0);
+        }
+    if ( childargc > 0 && strcmp(childargv[0], "logout") == 0 ) {
+            exit(0);
+         }
+    if (childargc > 1 && strcmp(childargv[1], "|") == 0 ) {
+             myPipe(childargv[0], childargv[2]);
+        }
+    if (childargc > 1 && strcmp(childargv[1], ">") == 0 ) {
+             myOut(childargv[0], childargv[2]);
+        }
+    else {
+        execute(childargc, childargv);
+    }
     // You should probably remove this; right now, it
     // just exits
     do_exit();
