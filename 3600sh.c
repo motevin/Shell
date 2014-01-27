@@ -13,6 +13,7 @@
 #define USE(x) (x) = (x)
 #define MAXLINE 200 
 #define MAXARGS 20
+void prompt();
 
  /* In C, "static" means not visible outside of file.  This is different
  * from the usage of "static" in Java.
@@ -51,11 +52,10 @@ static void execute(char *argv[])
     }
     if (childpid == 0) { /* child:  in child, childpid was set to 0 */
         /* Executes command in argv[0];  It searches for that file in
-     *  the directories specified by the environment variable PATH.
+     *  the directories specified by the ,.environment variable PATH.
          */
          if (-1 == execvp(argv[0], argv)) {
-          perror("execvp");
-          printf("  (couldn't find command)\n");
+          printf("Error: Command not found.\n");
         }
     /* NOT REACHED unless error occurred */
         exit(1);
@@ -78,8 +78,7 @@ static void getargs(char cmd[], int *argcp, char *argv[])
      *   for standard intput.  feof(stdin) tests for file:end-of-file.
      */
     if (fgets(cmd, MAXLINE, stdin) == NULL && feof(stdin)) {
-        printf("Couldn't read from standard input. End of file? Exiting ...\n");
-        exit(1);  /* any non-zero value for exit means failure. */
+        do_exit();
     }
     while ( (cmdp = getword(cmdp, &end)) != NULL ) { /* end is output param */
         /* getword converts word into null-terminated string */
@@ -98,6 +97,7 @@ static void getargs(char cmd[], int *argcp, char *argv[])
     *argcp = i;
 }
 
+
 void interrupt_handler(int signum) {
   printf("<Control-C>\n");
   signum = 0;
@@ -106,7 +106,44 @@ void interrupt_handler(int signum) {
   }
 }
 
-int main(int argc, char*argv[]) {
+void myOut(char* arg1, char* arg2) {
+  fpos_t pos;
+  int fd;
+  fflush(stdout);
+       fgetpos(stdout, &pos);
+       fd = dup(fileno(stdout));
+       freopen(arg2, "w", stdout);
+  char* argv[] = {arg1, NULL};
+      
+    pid_t childpid; /* child process ID */
+
+    childpid = fork();
+    if (childpid == -1) { /* in parent (returned error) */
+        perror("fork"); /* perror => print error string of last system call */
+        printf("  (failed to execute command)\n");
+    }
+    if (childpid == 0) { /* child:  in child, childpid was set to 0 */
+        /* Executes command in argv[0];  It searches for that file in
+     *  the directories specified by the environment variable PATH.
+         */
+         if (-1 == execvp(argv[0], argv)) {
+          perror("execvp");
+          printf("  (couldn't find command)\n");
+        }
+    /* NOT REACHED unless error occurred */
+        exit(1);
+    } else /* parent:  in parent, childpid was set to pid of child process */
+        waitpid(childpid, NULL, 0);  /* wait until child process finishes */
+    fflush(stdout);
+    dup2(fd, fileno(stdout));
+    close(fd);
+    clearerr(stdout);
+    fsetpos(stdout, &pos);
+  
+    return;
+}
+
+int main(int argc, char *argv[]) {
   // Code which sets stdout to be unbuffered
   // This is necessary for testing; do not change these lines
   USE(argc);
@@ -116,11 +153,15 @@ int main(int argc, char*argv[]) {
   char *childargv[MAXARGS];
   int childargc;
   signal(SIGINT, interrupt_handler); 
-  
-  // Main loop that reads a command and executes it
-  while (1) {         
-    printf("%% "); 
-    fflush(stdout); /* flush from output buffer to terminal itself */
+  if (argc > 1)
+  freopen(argv[1], "r", stdin);
+    while (1) {
+        if (feof(stdin)) {
+          do_exit();
+        }
+        prompt();
+         
+        fflush(stdout); /* flush from output buffer to terminal itself */
     getargs(cmd, &childargc, childargv); /* childargc and childargv are
             output args; on input they have garbage, but getargs sets them. */
         /* Check first for built-in commands. */
@@ -131,7 +172,7 @@ int main(int argc, char*argv[]) {
              //myPipe(childargv[0], childargv[2]);
         }
     if (childargc > 1 && strcmp(childargv[1], ">") == 0 ) {
-             //myOut(childargv[0], childargv[2]);
+             myOut(childargv[0], childargv[2]);
         }
     else {
         execute(childargv);
@@ -140,6 +181,31 @@ int main(int argc, char*argv[]) {
 
   return 0;
 }
+
+//Prints out the required prompt:
+//[user]@[host]:[dir]>[space]
+void prompt()
+ {
+  //get pwd
+  char *pwd = getcwd(NULL, 0);
+
+  //Hostname
+  char *host;
+  size_t host_max = sysconf(_SC_HOST_NAME_MAX); //get the max length of the hostname
+  host = calloc(host_max, sizeof(char)); //allocate memory
+  gethostname(host, host_max);
+
+
+  //User name
+  char *user;
+  size_t user_max = sysconf(_SC_LOGIN_NAME_MAX); //max length of the user
+  user = calloc(user_max, sizeof(char)); //allocate memory
+  struct passwd *pw = getpwuid(getuid());
+  user = pw->pw_name;
+
+  // Print the prompt.
+  printf("%s@%s:%s> ", user, host, pwd);
+ }
 
 // Function which exits, printing the necessary message
 //
