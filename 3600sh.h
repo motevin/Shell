@@ -12,6 +12,7 @@
 #define _3600sh_h
 
 #define _BSD_SOURCE
+#define _POSIX_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -22,6 +23,7 @@
 #include <sys/wait.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <pwd.h>
 
 void do_exit();
 
